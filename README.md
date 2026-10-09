@@ -32,7 +32,7 @@ child command normally; it does not exit the child. The child exit status become
 history and discard their own additions on return. The launch command itself
 may appear in the normal parent's history.
 
-The child appends **🥷 incognito** to your configured prompt. Your theme still
+The child prefixes your configured prompt with **🥷**. Your theme still
 receives the previous command's status and pipeline statuses, and the marker
 disappears when you return to the parent. Nested sessions show one marker each.
 
