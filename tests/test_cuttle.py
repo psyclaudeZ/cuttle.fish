@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Run all disposable tests, or select tests with standard unittest names."""
 import os
+import re
 import signal
 import subprocess
 import sys
 import time
 import unittest
-from support import FISH, INCOGNITO, ROOT, Fixture, FishPTY, age_history, quote
+from support import FISH, NORMAL_LOGIN, PRIVATE_LOGIN, ROOT, Fixture, FishPTY, age_history, quote
 
 
 @unittest.skipUnless(FISH, 'fish is required')
@@ -71,9 +72,9 @@ class CuttleTests(unittest.TestCase):
 
     def test_nested_lifetimes(self):
         shell = self.shell('builtin history append BASE_NESTED')
-        self.assertEqual(shell.enter().count(INCOGNITO), 1)
+        self.assertEqual(shell.enter().count(PRIVATE_LOGIN), 1)
         shell.run('echo OUTER_PRIVATE')
-        self.assertEqual(shell.enter().count(INCOGNITO), 1)
+        self.assertEqual(shell.enter().count(PRIVATE_LOGIN), 1)
         self.assertIn('echo OUTER_PRIVATE', shell.history())
         shell.run('echo INNER_PRIVATE')
         shell.leave()
@@ -84,6 +85,39 @@ class CuttleTests(unittest.TestCase):
         shell.run('builtin history save')
         for content in self.fixture.history_files().values():
             self.assertNotIn(b'PRIVATE', content)
+
+    def test_default_prompt_replaces_only_login(self):
+        # Load fish's real default prompt, then add only the PTY boundary marker.
+        self.fixture.config.write_text(self.fixture.config.read_text() + '''
+source $__fish_data_dir/functions/fish_prompt.fish
+functions --copy fish_prompt __test_default_prompt
+function fish_prompt
+    __test_default_prompt $argv
+    set -l mode normal
+    if test -n "$fish_private_mode"
+        set mode private
+    end
+    printf '\\036CFPROMPT:%s:%s\\037' $mode $fish_pid
+end
+''')
+        (self.fixture.root / 'work').mkdir()
+        self.fixture.env['HOME'] = str(self.fixture.root.resolve())
+        shell = self.shell()
+        shell.run('cd work')
+
+        def plain(output):
+            return re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]', b'', output)
+
+        output = plain(shell.enter())
+        self.assertIn(PRIVATE_LOGIN + b' ~/work', output)
+        self.assertNotIn(NORMAL_LOGIN, output)
+        output, result = shell.run('false')
+        self.assertEqual(result, 1)
+        self.assertIn(PRIVATE_LOGIN + b' ~/work', plain(output))
+        self.assertIn(b'[1]>', plain(output))
+        output, _ = shell.leave()
+        self.assertIn(NORMAL_LOGIN + b' ~/work', plain(output))
+        self.assertNotIn(PRIVATE_LOGIN, output)
 
     def test_prompt_preserves_theme_status_pipeline_and_parent(self):
         config = self.fixture.config.read_text()
@@ -97,6 +131,7 @@ function fish_prompt
         printf '\\036FINAL_RENDER\\037'
         return
     end
+    printf '%s ' (prompt_login)
     printf '\\036THEME_INPUT:%s:%s\\037' $previous[1] $previous[2]
     printf 'CUSTOM_THEME\\n'
     set -l mode normal
@@ -110,9 +145,9 @@ end
         self.assertIn(b'CUSTOM_THEME', shell.enter())
         output, result = shell.run('false')
         self.assertEqual(result, 1)
-        self.assertIn(INCOGNITO + b'\x1eTHEME_INPUT:1:1\x1f', output)
+        self.assertIn(PRIVATE_LOGIN + b' \x1eTHEME_INPUT:1:1\x1f', output)
         self.assertIn(b'\x1eFINAL_RENDER\x1f', output)
-        self.assertIn(INCOGNITO, output)
+        self.assertNotIn(NORMAL_LOGIN, output)
         self.assertNotIn(b'incognito', output)
         output, result = shell.run('/bin/sh -c "exit 7" | /bin/sh -c "exit 3"')
         self.assertEqual(result, 3)
@@ -122,7 +157,8 @@ end
         self.assertEqual(result, 1)
         self.assertIn(b'CUSTOM_THEME', output)
         self.assertIn(b'\x1eTHEME_INPUT:1:1\x1f', output)
-        self.assertNotIn(INCOGNITO, output)
+        self.assertIn(NORMAL_LOGIN + b' \x1eTHEME_INPUT:1:1\x1f', output)
+        self.assertNotIn(PRIVATE_LOGIN, output)
 
     def test_recall_and_autosuggestion(self):
         shell = self.shell('builtin history append "echo CF_AUTOSUGGEST_RESULT"')

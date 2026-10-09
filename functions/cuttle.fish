@@ -8,9 +8,9 @@
 # 3. Start fish --private with normal configuration. Reject a nonempty history
 #    namespace, then capture the pipe in an unexported child variable. cat feeds
 #    fd 9 to string split0; the scoped read-limit override permits large snapshots.
-# 4. Capture the configured prompt before printing an emoji prefix. The original
-#    prompt runs first so it receives the previous command's status/pipestatus;
-#    string collect preserves its multiline output, including trailing newlines.
+# 4. Replace the child's prompt_login helper with 🥷@dev. The configured
+#    fish_prompt stays intact, including its status handling and other details.
+#    This changes the identity segment in prompts that call prompt_login.
 # 5. Import once at the first fish_prompt event, after the private interactive
 #    reader exists. history append accepts each record literally, in order.
 #    The handler unregisters itself before importing, then erases the snapshot.
@@ -50,10 +50,8 @@ function cuttle --description 'Start a private fish with inherited history'
                 set -l fish_read_limit 0
                 set -gu __cuttle_history (command /bin/cat <&9 | builtin string split0)
             end
-            functions --copy fish_prompt __cuttle_original_prompt
-            function fish_prompt
-                set -l original_prompt (__cuttle_original_prompt $argv | builtin string collect --allow-empty --no-trim-newlines)
-                printf "%s%s" "🥷 " "$original_prompt"
+            function prompt_login
+                printf "%s" "🥷@dev"
             end
             # An unnamed private history belongs to the interactive reader.
             # Seed at its first prompt, after that reader has been created.

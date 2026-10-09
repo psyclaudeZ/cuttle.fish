@@ -15,7 +15,8 @@ FISH = shutil.which('fish')
 ROOT = Path(__file__).resolve().parents[1]
 PROMPT = rb'\x1eCFPROMPT:(normal|private):(\d+)\x1f'
 DONE = rb'\x1eCFDONE:(\d+):(\d+)\x1f'
-INCOGNITO = '🥷 '.encode()
+PRIVATE_LOGIN = '🥷@dev'.encode()
+NORMAL_LOGIN = b'fixture_user@fixture_host'
 
 
 def quote(value):
@@ -43,11 +44,15 @@ class Fixture:
         self.config = config / 'config.fish'
         self.config.write_text('''
 set -g fish_greeting
+function prompt_login
+    printf 'fixture_user@fixture_host'
+end
 function fish_prompt
     set -l mode normal
     if test -n "$fish_private_mode"
         set mode private
     end
+    printf '%s ' (prompt_login)
     printf '\\036CFPROMPT:%s:%s\\037' $mode $fish_pid
 end
 function fish_right_prompt
@@ -128,7 +133,7 @@ class FishPTY:
         self.mode = match.group(1).decode()
         self.pids.add(self.current)
         if self.mode == 'private':
-            assert INCOGNITO in output, output[-4000:]
+            assert PRIVATE_LOGIN in output, output[-4000:]
         return output
 
     def send(self, command):
