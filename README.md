@@ -32,11 +32,11 @@ child command normally; it does not exit the child. The child exit status become
 history and discard their own additions on return. The launch command itself
 may appear in the normal parent's history.
 
-The child replaces the prompt's `user@host` segment with **🥷@dev**, leaving
-the rest of the prompt intact. This works with fish's default prompt and themes
-that use `prompt_login`; themes that build their own identity segment will need
-to call that helper to show the marker. The parent's prompt returns on exit.
-Nested sessions show the same identity once.
+The child replaces a leading `user@host` segment with **🥷@dev**, including
+ANSI-colored identities. If the theme has no leading identity, it prepends
+**🥷@dev** instead. The rest of the configured prompt and its status handling
+remain intact. The parent's prompt returns on exit. Nested sessions show the
+same identity once.
 
 The snapshot includes the parent's available in-memory history. There is no
 history merge, live synchronization, archive, or promotion. NUL-delimited entries

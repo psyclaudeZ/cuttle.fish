@@ -8,9 +8,9 @@
 # 3. Start fish --private with normal configuration. Reject a nonempty history
 #    namespace, then capture the pipe in an unexported child variable. cat feeds
 #    fd 9 to string split0; the scoped read-limit override permits large snapshots.
-# 4. Replace the child's prompt_login helper with 🥷@dev. The configured
-#    fish_prompt stays intact, including its status handling and other details.
-#    This changes the identity segment in prompts that call prompt_login.
+# 4. Wrap the configured prompt, running it first to preserve status/pipestatus.
+#    Replace a leading user@host (including ANSI colors) with 🥷@dev; otherwise
+#    prepend 🥷@dev. Capture output literally, preserving multiline/trailing text.
 # 5. Import once at the first fish_prompt event, after the private interactive
 #    reader exists. history append accepts each record literally, in order.
 #    The handler unregisters itself before importing, then erases the snapshot.
@@ -50,8 +50,19 @@ function cuttle --description 'Start a private fish with inherited history'
                 set -l fish_read_limit 0
                 set -gu __cuttle_history (command /bin/cat <&9 | builtin string split0)
             end
-            function prompt_login
-                printf "%s" "🥷@dev"
+            functions --copy fish_prompt __cuttle_original_prompt
+            function fish_prompt
+                set -l original_prompt (__cuttle_original_prompt $argv | builtin string collect --allow-empty --no-trim-newlines)
+                set -l ansi "\e\[[0-?]*[ -/]*[@-~]"
+                set -l name "(?:[[:alnum:]_.-]+(?:$ansi)*)+"
+                set -l login "(?:$ansi)*$name@(?:$ansi)*$name"
+                if builtin string match --quiet --regex -- "^$login" "$original_prompt"
+                    # The sentinel anchors replacement to the first line only.
+                    # Streaming keeps the exact original newline endings.
+                    printf "\036%s" "$original_prompt" | builtin string replace --regex -- "^\x1e$login" "🥷@dev"
+                else
+                    printf "%s%s" "🥷@dev " "$original_prompt"
+                end
             end
             # An unnamed private history belongs to the interactive reader.
             # Seed at its first prompt, after that reader has been created.

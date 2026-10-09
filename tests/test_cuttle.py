@@ -119,6 +119,40 @@ end
         self.assertIn(NORMAL_LOGIN + b' ~/work', plain(output))
         self.assertNotIn(PRIVATE_LOGIN, output)
 
+    def test_prompts_without_login_helper_show_marker(self):
+        config = self.fixture.config.read_text()
+        themes = [
+            ('\x1b[32mfixture_user\x1b[0m@\x1b[34mfixture_host\x1b[0m'
+             ' ~/work (git:main)\nfixture_user@fixture_host stays\n\n',
+             '🥷@dev ~/work (git:main)\nfixture_user@fixture_host stays\n\n'),
+            ('~/work (git:main)>\n\n', '🥷@dev ~/work (git:main)>\n\n'),
+        ]
+        for theme, expected in themes:
+            with self.subTest(theme=theme):
+                # These prompts deliberately never call prompt_login.
+                self.fixture.config.write_text(config + '''
+function fish_prompt
+    printf '%s' ''' + quote(theme) + '''
+    set -l mode normal
+    if test -n "$fish_private_mode"
+        set mode private
+    end
+    printf '\\036CFPROMPT:%s:%s\\037' $mode $fish_pid
+end
+''')
+                shell = self.shell()
+                # fish inserts erase-line sequences while painting multiline prompts.
+                output = shell.enter().replace(b'\x1b[K', b'')
+                rendered = expected.replace('\n', '\r\n').encode()
+                self.assertIn(rendered + b'\x1eCFPROMPT:private:', output)
+                output, _ = shell.run('true')
+                self.assertIn(rendered + b'\x1eCFPROMPT:private:', output.replace(b'\x1b[K', b''))
+                output, _ = shell.leave()
+                self.assertIn(theme.replace('\n', '\r\n').encode()
+                              + b'\x1eCFPROMPT:normal:', output.replace(b'\x1b[K', b''))
+                self.assertNotIn(PRIVATE_LOGIN, output)
+                shell.close()
+
     def test_prompt_preserves_theme_status_pipeline_and_parent(self):
         config = self.fixture.config.read_text()
         # Instrument the configured prompt, including a multiline theme and
