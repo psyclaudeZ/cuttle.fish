@@ -36,6 +36,8 @@ class Fixture:
         self.env.update(HOME=str(self.root), XDG_CONFIG_HOME=str(self.root / 'config'),
                         XDG_DATA_HOME=str(self.root / 'data'),
                         XDG_CACHE_HOME=str(self.root / 'cache'), TERM='xterm-256color')
+        # Prevent fish's first-run background generator from racing cleanup.
+        (self.root / 'cache/fish/generated_completions').mkdir(parents=True)
         config = self.root / 'config/fish'
         config.mkdir(parents=True)
         self.config = config / 'config.fish'
