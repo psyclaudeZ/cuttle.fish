@@ -1,3 +1,18 @@
+# How cuttle works:
+# 1. Search the parent reader's visible history, including in-memory entries,
+#    without merging other shells. Emit oldest-first, NUL-delimited records so
+#    multiline commands and literal shell syntax remain data.
+# 2. A fixed sh exec wrapper moves the pipe to fd 9 and opens /dev/tty as stdin.
+#    The transfer uses neither argv/environment data nor regular temporary files.
+#    Clear fish_history only in the child's environment, keeping the parent intact.
+# 3. Start fish --private with normal configuration. Reject a nonempty history
+#    namespace, then capture the pipe in an unexported child variable. cat feeds
+#    fd 9 to string split0; the scoped read-limit override permits large snapshots.
+# 4. Import once at the first fish_prompt event, after the private interactive
+#    reader exists. history append accepts each record literally, in order.
+#    The handler unregisters itself before importing, then erases the snapshot.
+# The parent waits for the child and returns its exit status. Child history
+# disappears with that process; nothing is merged into the parent.
 function cuttle --description 'Start a private fish with inherited history'
     if test (count $argv) -ne 0
         printf 'Usage: cuttle\n' >&2
