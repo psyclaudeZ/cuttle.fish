@@ -1,79 +1,39 @@
 # cuttle.fish
 
-`cuttle` starts a private child fish with a fixed snapshot of your current shell's
-visible command history. Inherited commands work with fish search, recall, and
-autosuggestions. Commands entered in the child remain available there and
-vanish when it exits; they are never merged back into the parent.
+Private fish with your existing history. Search, recall, and autosuggestions
+work normally. New commands stay in memory until exit and never merge back.
 
-Requires fish **4.0+**, a Unix terminal, `/bin/sh`, and `/bin/cat`. Verified with
-**fish 4.5.0** and **tmux 3.6a** on macOS; other versions/platforms are untested.
+Requires **fish 4.0+**, a Unix terminal, `/bin/sh`, and `/bin/cat`.
+Tested on macOS with **fish 4.5.0** and **tmux 3.6a**.
 
-From this checkout, try it without installing:
+Try from this checkout:
 
 ```fish
 source functions/cuttle.fish
 cuttle
 ```
 
-To install the autoloaded function yourself:
+Or install (adjust the path for a custom fish config directory):
 
 ```fish
 mkdir -p ~/.config/fish/functions
 cp functions/cuttle.fish ~/.config/fish/functions/cuttle.fish
 ```
 
-Use your custom fish config directory instead if applicable. For Fisher, this
-repository uses its standard `functions/` layout.
+Run `cuttle` in fish or a tmux pane. The prompt shows **🥷@dev** in place of
+leading `user@host`, or as a prefix. `exit` or Ctrl-D restores the parent shell.
 
-Run `cuttle` from an interactive fish, including inside a tmux pane. Type `exit`
-or press Ctrl-D to return to the original parent shell. Ctrl-C interrupts a
-child command normally; it does not exit the child. The child exit status becomes
-`cuttle`'s status. Nested `cuttle` sessions inherit their immediate parent's
-history and discard their own additions on return. The launch command itself
-may appear in the normal parent's history.
+- History is a fixed snapshot, including in-memory entries; no live syncing,
+  temporary history files, or archives. The parent's `cuttle` entry is expected.
+- Normal config, directory, and exported environment carry over; local variables,
+  runtime-defined functions, and jobs do not.
+- **Keep `fish_history` empty in the child.** Setting a namespace can enable disk
+  history; startup config that sets one is rejected.
+- Privacy covers fish history only, not files, application histories, scrollback,
+  or recording plugins.
 
-The child replaces a leading `user@host` segment with **🥷@dev**, including
-ANSI-colored identities. If the theme has no leading identity, it prepends
-**🥷@dev** instead. The rest of the configured prompt and its status handling
-remain intact. The parent's prompt returns on exit. Nested sessions show the
-same identity once.
-
-The snapshot includes the parent's available in-memory history. There is no
-history merge, live synchronization, archive, or promotion. NUL-delimited entries
-travel through a pipe into unexported child memory, never through a regular
-temporary file, environment variable, or external program argument list. Fish's
-`history append` imports entries as data, oldest first. Original timestamps and
-path metadata are not transferred.
-
-The child loads normal fish configuration and inherits the working directory
-and exported environment, with `fish_history` cleared for private history.
-Parent-local variables, runtime-defined functions, and jobs are not transferred.
-Install/source `cuttle` in your config if you want it available for nested
-invocation. Changes made by the child to its directory
-or variables do not change the parent.
-
-**History settings matter:** fish 4.5.0 allows setting a named `fish_history` to
-re-enable persistence even after `--private`. `cuttle` refuses to import history
-if startup configuration changes that variable to a nonempty name. Keep
-`fish_history` empty throughout the child session; changing it can enable disk
-history. Configuration that changes namespaces, clears history, disables
-recording, or replaces fish's history behavior is incompatible. Arbitrary
-configuration and plugins cannot be made safe by this function.
-
-This isolates fish command history. It does not isolate filesystem changes,
-application histories, terminal/tmux scrollback, or external history-recording
-plugins. Normal config can still write its own settings/cache files.
-
-Run the disposable tests with Python 3 and fish installed:
+Tests (Python 3; isolated fixtures, real PTYs, optional tmux):
 
 ```sh
 python3 tests/test_cuttle.py
 ```
-
-The suite uses isolated HOME/XDG directories and real PTYs, plus a separate tmux
-server when tmux is installed. It covers literal/multiline transport, snapshots
-without merging, histories beyond `ARG_MAX`, search/recall/autosuggestions,
-private command persistence, startup rejection, nesting, and terminal recovery.
-It never installs into your fish config or reads or modifies your real history.
-PTY/process-group operations must be allowed;
-restricted sandboxes can make fish report an orphaned process and exit.
