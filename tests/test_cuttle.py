@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 import unittest
-from support import FISH, ROOT, Fixture, FishPTY, age_history, quote
+from support import FISH, INCOGNITO, ROOT, Fixture, FishPTY, age_history, quote
 
 
 @unittest.skipUnless(FISH, 'fish is required')
@@ -71,9 +71,9 @@ class CuttleTests(unittest.TestCase):
 
     def test_nested_lifetimes(self):
         shell = self.shell('builtin history append BASE_NESTED')
-        shell.enter()
+        self.assertEqual(shell.enter().count(INCOGNITO), 1)
         shell.run('echo OUTER_PRIVATE')
-        shell.enter()
+        self.assertEqual(shell.enter().count(INCOGNITO), 1)
         self.assertIn('echo OUTER_PRIVATE', shell.history())
         shell.run('echo INNER_PRIVATE')
         shell.leave()
@@ -84,6 +84,44 @@ class CuttleTests(unittest.TestCase):
         shell.run('builtin history save')
         for content in self.fixture.history_files().values():
             self.assertNotIn(b'PRIVATE', content)
+
+    def test_prompt_preserves_theme_status_pipeline_and_parent(self):
+        config = self.fixture.config.read_text()
+        # Instrument the configured prompt, including a multiline theme and
+        # transient rendering. Read status/pipestatus before any other commands.
+        self.fixture.config.write_text(config + '''
+set -g fish_transient_prompt 1
+function fish_prompt
+    set -l previous "$status" "$pipestatus"
+    if contains -- --final-rendering $argv
+        printf '\\036FINAL_RENDER\\037'
+        return
+    end
+    printf '\\036THEME_INPUT:%s:%s\\037' $previous[1] $previous[2]
+    printf 'CUSTOM_THEME\\n'
+    set -l mode normal
+    if test -n "$fish_private_mode"
+        set mode private
+    end
+    printf '\\036CFPROMPT:%s:%s\\037' $mode $fish_pid
+end
+''')
+        shell = self.shell()
+        self.assertIn(b'CUSTOM_THEME', shell.enter())
+        output, result = shell.run('false')
+        self.assertEqual(result, 1)
+        self.assertIn(b'\x1eTHEME_INPUT:1:1\x1f', output)
+        self.assertIn(b'\x1eFINAL_RENDER\x1f', output)
+        self.assertIn(INCOGNITO, output)
+        output, result = shell.run('/bin/sh -c "exit 7" | /bin/sh -c "exit 3"')
+        self.assertEqual(result, 3)
+        self.assertIn(b'\x1eTHEME_INPUT:3:7 3\x1f', output)
+        shell.leave()
+        output, result = shell.run('false')
+        self.assertEqual(result, 1)
+        self.assertIn(b'CUSTOM_THEME', output)
+        self.assertIn(b'\x1eTHEME_INPUT:1:1\x1f', output)
+        self.assertNotIn(INCOGNITO, output)
 
     def test_recall_and_autosuggestion(self):
         shell = self.shell('builtin history append "echo CF_AUTOSUGGEST_RESULT"')

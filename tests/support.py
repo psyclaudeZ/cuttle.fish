@@ -15,6 +15,7 @@ FISH = shutil.which('fish')
 ROOT = Path(__file__).resolve().parents[1]
 PROMPT = rb'\x1eCFPROMPT:(normal|private):(\d+)\x1f'
 DONE = rb'\x1eCFDONE:(\d+):(\d+)\x1f'
+INCOGNITO = '🥷 incognito '.encode()
 
 
 def quote(value):
@@ -124,6 +125,9 @@ class FishPTY:
         self.current = int(match.group(2))
         self.mode = match.group(1).decode()
         self.pids.add(self.current)
+        if self.mode == 'private':
+            marker, _ = self.until(re.escape(INCOGNITO))
+            output += marker
         return output
 
     def send(self, command):

@@ -8,11 +8,13 @@
 # 3. Start fish --private with normal configuration. Reject a nonempty history
 #    namespace, then capture the pipe in an unexported child variable. cat feeds
 #    fd 9 to string split0; the scoped read-limit override permits large snapshots.
-# 4. Import once at the first fish_prompt event, after the private interactive
+# 4. Wrap the child's configured prompt with an incognito marker. The original
+#    prompt runs first so it receives the previous command's status/pipestatus.
+# 5. Import once at the first fish_prompt event, after the private interactive
 #    reader exists. history append accepts each record literally, in order.
 #    The handler unregisters itself before importing, then erases the snapshot.
-# The parent waits for the child and returns its exit status. Child history
-# disappears with that process; nothing is merged into the parent.
+# The parent waits for the child and returns its exit status. Child history and
+# prompt changes disappear with that process; nothing is merged into the parent.
 function cuttle --description 'Start a private fish with inherited history'
     if test (count $argv) -ne 0
         printf 'Usage: cuttle\n' >&2
@@ -46,6 +48,11 @@ function cuttle --description 'Start a private fish with inherited history'
             begin
                 set -l fish_read_limit 0
                 set -gu __cuttle_history (command /bin/cat <&9 | builtin string split0)
+            end
+            functions --copy fish_prompt __cuttle_original_prompt
+            function fish_prompt
+                __cuttle_original_prompt $argv
+                printf "%s" "🥷 incognito "
             end
             # An unnamed private history belongs to the interactive reader.
             # Seed at its first prompt, after that reader has been created.
