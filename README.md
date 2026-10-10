@@ -1,6 +1,6 @@
 # cuttle.fish
 
-`cuttle` starts a private fish shell that keeps the parent’s history available without saving new commands to disk.
+`cuttle` starts a private fish shell with access to the parent’s history, without recording new commands in your normal shell history.
 
 Install from this checkout:
 
