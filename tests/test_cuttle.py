@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 import unittest
-from support import FISH, NORMAL_LOGIN, PRIVATE_LOGIN, ROOT, Fixture, FishPTY, age_history, quote
+from support import FISH, NORMAL_LOGIN, PRIVATE_LOGIN, PRIVATE_MARKER, ROOT, Fixture, FishPTY, age_history, quote
 
 
 @unittest.skipUnless(FISH, 'fish is required')
@@ -86,7 +86,7 @@ class CuttleTests(unittest.TestCase):
         for content in self.fixture.history_files().values():
             self.assertNotIn(b'PRIVATE', content)
 
-    def test_default_prompt_replaces_only_login(self):
+    def test_default_prompt_replaces_only_username(self):
         # Load fish's real default prompt, then add only the PTY boundary marker.
         self.fixture.config.write_text(self.fixture.config.read_text() + '''
 source $__fish_data_dir/functions/fish_prompt.fish
@@ -117,15 +117,17 @@ end
         self.assertIn(b'[1]>', plain(output))
         output, _ = shell.leave()
         self.assertIn(NORMAL_LOGIN + b' ~/work', plain(output))
-        self.assertNotIn(PRIVATE_LOGIN, output)
+        self.assertNotIn(PRIVATE_MARKER, output)
 
     def test_prompts_without_login_helper_show_marker(self):
         config = self.fixture.config.read_text()
         themes = [
             ('\x1b[32mfixture_user\x1b[0m@\x1b[34mfixture_host\x1b[0m'
              ' ~/work (git:main)\nfixture_user@fixture_host stays\n\n',
-             '🥷@dev ~/work (git:main)\nfixture_user@fixture_host stays\n\n'),
-            ('~/work (git:main)>\n\n', '🥷@dev ~/work (git:main)>\n\n'),
+             '\x1b[32m🥷\x1b[0m@\x1b[34mfixture_host\x1b[0m'
+             ' ~/work (git:main)\nfixture_user@fixture_host stays\n\n'),
+            ('alice@staging.example.net ~/work>', '🥷@staging.example.net ~/work>'),
+            ('~/work (git:main)>\n\n', '🥷 ~/work (git:main)>\n\n'),
         ]
         for theme, expected in themes:
             with self.subTest(theme=theme):
@@ -150,7 +152,7 @@ end
                 output, _ = shell.leave()
                 self.assertIn(theme.replace('\n', '\r\n').encode()
                               + b'\x1eCFPROMPT:normal:', output.replace(b'\x1b[K', b''))
-                self.assertNotIn(PRIVATE_LOGIN, output)
+                self.assertNotIn(PRIVATE_MARKER, output)
                 shell.close()
 
     def test_prompt_preserves_theme_status_pipeline_and_parent(self):
@@ -192,7 +194,7 @@ end
         self.assertIn(b'CUSTOM_THEME', output)
         self.assertIn(b'\x1eTHEME_INPUT:1:1\x1f', output)
         self.assertIn(NORMAL_LOGIN + b' \x1eTHEME_INPUT:1:1\x1f', output)
-        self.assertNotIn(PRIVATE_LOGIN, output)
+        self.assertNotIn(PRIVATE_MARKER, output)
 
     def test_recall_and_autosuggestion(self):
         shell = self.shell('builtin history append "echo CF_AUTOSUGGEST_RESULT"')

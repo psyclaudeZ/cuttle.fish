@@ -20,8 +20,9 @@ mkdir -p ~/.config/fish/functions
 cp functions/cuttle.fish ~/.config/fish/functions/cuttle.fish
 ```
 
-Run `cuttle` in fish or a tmux pane. The prompt shows **🥷@dev** in place of
-leading `user@host`, or as a prefix. `exit` or Ctrl-D restores the parent shell.
+Run `cuttle` in fish or a tmux pane. The prompt replaces the username in leading
+`user@host` with **🥷**, keeping the host; otherwise it prefixes **🥷**.
+`exit` or Ctrl-D restores the parent shell.
 
 - History is a fixed snapshot, including in-memory entries; no live syncing,
   temporary history files, or archives. The parent's `cuttle` entry is expected.

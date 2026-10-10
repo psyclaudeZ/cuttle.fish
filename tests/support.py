@@ -15,7 +15,8 @@ FISH = shutil.which('fish')
 ROOT = Path(__file__).resolve().parents[1]
 PROMPT = rb'\x1eCFPROMPT:(normal|private):(\d+)\x1f'
 DONE = rb'\x1eCFDONE:(\d+):(\d+)\x1f'
-PRIVATE_LOGIN = '🥷@dev'.encode()
+PRIVATE_MARKER = '🥷'.encode()
+PRIVATE_LOGIN = PRIVATE_MARKER + b'@fixture_host'
 NORMAL_LOGIN = b'fixture_user@fixture_host'
 
 
@@ -133,7 +134,7 @@ class FishPTY:
         self.mode = match.group(1).decode()
         self.pids.add(self.current)
         if self.mode == 'private':
-            assert PRIVATE_LOGIN in output, output[-4000:]
+            assert PRIVATE_MARKER in output, output[-4000:]
         return output
 
     def send(self, command):

@@ -9,8 +9,8 @@
 #    namespace, then capture the pipe in an unexported child variable. cat feeds
 #    fd 9 to string split0; the scoped read-limit override permits large snapshots.
 # 4. Wrap the configured prompt, running it first to preserve status/pipestatus.
-#    Replace a leading user@host (including ANSI colors) with 🥷@dev; otherwise
-#    prepend 🥷@dev. Capture output literally, preserving multiline/trailing text.
+#    Replace the username in a leading user@host with 🥷, preserving ANSI colors
+#    and the host; otherwise prepend 🥷. Preserve multiline/trailing text literally.
 # 5. Import once at the first fish_prompt event, after the private interactive
 #    reader exists. history append accepts each record literally, in order.
 #    The handler unregisters itself before importing, then erases the snapshot.
@@ -54,14 +54,13 @@ function cuttle --description 'Start a private fish with inherited history'
             function fish_prompt
                 set -l original_prompt (__cuttle_original_prompt $argv | builtin string collect --allow-empty --no-trim-newlines)
                 set -l ansi "\e\[[0-?]*[ -/]*[@-~]"
-                set -l name "(?:[[:alnum:]_.-]+(?:$ansi)*)+"
-                set -l login "(?:$ansi)*$name@(?:$ansi)*$name"
-                if builtin string match --quiet --regex -- "^$login" "$original_prompt"
+                set -l username "((?:$ansi)*)[[:alnum:]_.-]+((?:$ansi)*)(?=@)"
+                if builtin string match --quiet --regex -- "^$username" "$original_prompt"
                     # The sentinel anchors replacement to the first line only.
                     # Streaming keeps the exact original newline endings.
-                    printf "\036%s" "$original_prompt" | builtin string replace --regex -- "^\x1e$login" "🥷@dev"
+                    printf "\036%s" "$original_prompt" | builtin string replace --regex -- "^\x1e$username" "\$1🥷\$2"
                 else
-                    printf "%s%s" "🥷@dev " "$original_prompt"
+                    printf "%s%s" "🥷 " "$original_prompt"
                 end
             end
             # An unnamed private history belongs to the interactive reader.
