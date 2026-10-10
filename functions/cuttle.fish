@@ -1,21 +1,8 @@
-# How cuttle works:
-# 1. Search the parent reader's visible history, including in-memory entries,
-#    without merging other shells. Emit oldest-first, NUL-delimited records so
-#    multiline commands and literal shell syntax remain data.
-# 2. A fixed sh exec wrapper moves the pipe to fd 9 and opens /dev/tty as stdin.
-#    The transfer uses neither argv/environment data nor regular temporary files.
-#    Clear fish_history only in the child's environment, keeping the parent intact.
-# 3. Start fish --private with normal configuration. Reject a nonempty history
-#    namespace, then capture the pipe in an unexported child variable. cat feeds
-#    fd 9 to string split0; the scoped read-limit override permits large snapshots.
-# 4. Wrap the configured prompt, running it first to preserve status/pipestatus.
-#    Replace the username in a leading user@host with 🥷, preserving ANSI colors
-#    and the host; otherwise prepend 🥷. Preserve multiline/trailing text literally.
-# 5. Import once at the first fish_prompt event, after the private interactive
-#    reader exists. history append accepts each record literally, in order.
-#    The handler unregisters itself before importing, then erases the snapshot.
-# The parent waits for the child and returns its exit status. Child history and
-# prompt changes disappear with that process; nothing is merged into the parent.
+# cuttle snapshots the parent history and starts a private child fish.
+# The child loads normal configuration, imports the snapshot into memory,
+# and marks its prompt with 🥷. Inherited and new commands remain usable
+# in the child, but new commands never merge into the parent history.
+# Exiting discards the child history and returns to the original parent shell.
 function cuttle --description 'Start a private fish with inherited history'
     if test (count $argv) -ne 0
         printf 'Usage: cuttle\n' >&2
@@ -32,11 +19,9 @@ function cuttle --description 'Start a private fish with inherited history'
         return 2
     end
 
-    # The builtin searches this process's visible history without merging.
-    # Oldest first: append makes the last imported entry the newest one.
-    # fd 9 carries NUL-delimited data; stdin stays on the controlling terminal.
-    # Apply redirections after fish has connected the pipeline's stdin, and
-    # prevent an exported parent namespace from reaching startup configuration.
+    # NUL-delimited, oldest-first entries preserve multiline commands and recall order.
+    # fd 9 carries history; /dev/tty keeps the child interactive.
+    # Clear the inherited namespace to prevent named history from enabling saves.
     builtin history search --null --reverse | command /bin/sh -c \
         'fish_history= exec "$@" 9<&0 </dev/tty' cuttle "$fish_executable" \
         --private --interactive --init-command '
@@ -45,26 +30,25 @@ function cuttle --description 'Start a private fish with inherited history'
                 exec /bin/sh -c "exit 1"
             end
             set -gx fish_history ""
-            # Capture now: prompt event handlers do not have the pipe as stdin.
+            # Disable the read limit for large history snapshots.
             begin
                 set -l fish_read_limit 0
                 set -gu __cuttle_history (command /bin/cat <&9 | builtin string split0)
             end
             functions --copy fish_prompt __cuttle_original_prompt
             function fish_prompt
+                # Capture the prompt first to preserve status/pipestatus and newlines.
                 set -l original_prompt (__cuttle_original_prompt $argv | builtin string collect --allow-empty --no-trim-newlines)
                 set -l ansi "\e\[[0-?]*[ -/]*[@-~]"
                 set -l username "((?:$ansi)*)[[:alnum:]_.-]+((?:$ansi)*)(?=@)"
                 if builtin string match --quiet --regex -- "^$username" "$original_prompt"
-                    # The sentinel anchors replacement to the first line only.
-                    # Streaming keeps the exact original newline endings.
+                    # The sentinel limits replacement to the first line; piping preserves newlines.
                     printf "\036%s" "$original_prompt" | builtin string replace --regex -- "^\x1e$username" "\$1🥷\$2"
                 else
                     printf "%s%s" "🥷 " "$original_prompt"
                 end
             end
-            # An unnamed private history belongs to the interactive reader.
-            # Seed at its first prompt, after that reader has been created.
+            # Private history exists only after the interactive reader starts.
             function __cuttle_seed_history --on-event fish_prompt
                 functions --erase __cuttle_seed_history
                 if test -n "$fish_history"
